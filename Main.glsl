@@ -46,7 +46,7 @@ int AA = 3;
 void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     // camera movement	
 	//iTime
-	vec3 ro = vec3( 0, 0, 2 ), ta = vec3(0), tot = vec3(0);
+	vec3 ro = vec3( 0/*cos(iTime)*/, 0, 2.0 /** sin(iTime)*/), ta = vec3(0), tot = vec3(0);
        
     for( int m=0; m<AA; m++ )
         for( int n=0; n<AA; n++ ) {
@@ -55,7 +55,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
                 p = (2.0*(fragCoord+o)-iResolution.xy)/iResolution.y;
 
             // create view ray
-            vec3 rd = normalize(vec3(p.x, p.y, -0.5));
+            vec3 rd = normalize(vec3(p.x, sin(iTime)*p.y, -0.5));
 
             // raymarch
             float tmax = 3.0, t = 0.0;
@@ -76,7 +76,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
                 vec3 pos = ro + t*rd, nor = calcNormal(pos);
                 
                 float dif = clamp( dot(nor,vec3(0.58)), 0.0, 1.0 ),
-                    amb = 0.5 + 0.5*dot(nor,vec3(0,1,0));
+                    amb = (1.0 + dot(nor,vec3(0,1,0)))/2.0;
                 
                 col = vec3(0.2,0.3,0.4)*amb + vec3(0.8,0.7,0.5)*dif;
             }
