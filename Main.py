@@ -1,5 +1,3 @@
-#->GLSL Shadertoy
-
 from pygame.locals import DOUBLEBUF #pygl
 from pygame import quit, QUIT, KEYUP, K_SPACE, init, OPENGL
 from pygame.display import set_mode, flip
@@ -34,26 +32,25 @@ a_X, a_Y, a_Z = array(x), array(y), array(z)
 
 class Axes:
     def __init__(self, pos):
-        self.pos = array(pos)
-        self.x, self.y, self.z = 3 * a_X, 3 * a_Y, 3 * a_Z
+        self.pos, (self.x, self.y, self.z) = array(pos),\
+                          (3 * a_X, 3 * a_Y, 3 * a_Z)
 
     """
     Axes._draw_line(vector:np.array, color:tuple)
         draws a vector from its position
     """
-
     def _draw_line(self, vector, color):
         glColor(color)
         glBegin(GL_LINES)
-        glVertex(self.pos)
-        glVertex(self.pos + vector)
+
+        (*(glVertex(self.pos + v) for v in (zeros(3), vector)),)
+
         glEnd()
 
     """
     Axes.render([pos:tuple])
         renders the x, y and z axes
     """
-
     def render(self, pos=zeros(3)):     
         glPushMatrix()
 
@@ -69,45 +66,41 @@ class Axes:
         glLineWidth(1)
         glPopMatrix()
 
-def draw_cylinder(radius, height, num_slices):
-    r, h, n = radius, height, float(num_slices)
+def draw_cylinder1(v, v1, circle_pts, z1):   
+    glBegin(GL_TRIANGLE_FAN)
+    glColor(*v)
 
-    circle_pts = []
+    ##################
+    glVertex(*(v1[2]*a_Z))
+
+    (*(glVertex(*v, z1) for v in circle_pts),)       
+
+    glEnd()
+
+X, Y, Z = (1,0,0), (0,1,0), (0,0,1)
+
+def draw_cylinder(radius, height, num_slices):
+    r, n, z, circle_pts = radius, float(num_slices), height / 2,\
+                          []
+    
     for i in range(int(n) + 1):
         angle = 2 * pi * i/n
-        x = r * cos(angle)
-        y = r * sin(angle)
+        x, y = r * cos(angle), r * sin(angle)
         pt = (x, y)
         circle_pts.append(pt)
 
-    glBegin(GL_TRIANGLE_FAN)#drawing the back circle
-    glColor(1, 0, 0)
-    glVertex(0, 0, h/2.0)
-
-    for (x, y) in circle_pts:
-        z = h/2.0
-        glVertex(x, y, z)
-
-    glEnd()
-
-    glBegin(GL_TRIANGLE_FAN)#drawing the front circle
-    glColor(0, 0, 1)
-    glVertex(0, 0, h/2.0)
-
-    for (x, y) in circle_pts:
-        z = -h/2.0
-        glVertex(x, y, z)
-
-    glEnd()
-
+    (*(draw_cylinder1(eje, (x, y, z), circle_pts, n) for eje, n
+       in ((X,z), (Z,-z))),)
+    
     glBegin(GL_TRIANGLE_STRIP)#draw the tube
-    glColor(0, 1, 0)
+    glColor(*Y)
 
-    for (x, y) in circle_pts:
-        z = h/2.0
-        glVertex(x, y, z)
-        glVertex(x, y, -z)
+    '''v = x,y
 
+    (*((*(glVertex(*v, z) for v, z in ((v, z), (v,-z))),) for v in circle_pts),)'''
+    
+    (*((*(glVertex(x, y, z) for z in (z, -z)),) for x, y in circle_pts),)
+        
     glEnd()
 
 class Cylinder:
@@ -120,7 +113,6 @@ class Cylinder:
     Cylinder.render()
         renders the cylinder
     """
-
     def render(self):
         glPushMatrix()
         glTranslate(*self.pos)
@@ -133,7 +125,8 @@ class Cylinder:
         glPopMatrix()
 
 class Tbar:
-    def __init__(self, size=2.5, pos=zeros(3), angvel=array((40, 1, 1))/10):
+    def __init__(self, size=2.5, pos=zeros(3),
+                 angvel=array((40, 1, 1))/10):
         self.size = size
 
         #no colapsable
@@ -181,12 +174,15 @@ class Tbar:
         computes the new angular acceleration based on Euler's equations
     """
     def _compute_angacc(self):
-        self.angacc = (((self.moment_inertia[1] - self.moment_inertia[2])
-            * self.angvel[1] * self.angvel[2] / self.moment_inertia[0]),\
-            ((self.moment_inertia[2] - self.moment_inertia[0])
-            * self.angvel[2] * self.angvel[0] / self.moment_inertia[1]),\
-            ((self.moment_inertia[0] - self.moment_inertia[1])
-            * self.angvel[0] * self.angvel[1] / self.moment_inertia[2]))
+        self.angacc = (((self.moment_inertia[1] - self.moment_inertia[2])\
+            / self.moment_inertia[0] * self.angvel[1] *
+            self.angvel[2] ),\
+            ((self.moment_inertia[2] - self.moment_inertia[0])\
+            / self.moment_inertia[1] * self.angvel[2] *
+            self.angvel[0] ),\
+            ((self.moment_inertia[0] - self.moment_inertia[1])\
+            / self.moment_inertia[2] * self.angvel[0] *
+            self.angvel[1] ))
          
     """
     Tbar._compute_angvel()
@@ -194,8 +190,8 @@ class Tbar:
         and appends it to the plot
     """
     def _compute_angvel(self):
-        for axis in range(3):
-            self.angvel[axis] += self.angacc[axis]/DEFAULT_DELAY
+        for axis in range(3): self.angvel[axis] +=\
+            self.angacc[axis]/DEFAULT_DELAY
 
         if self.graph_count == GRAPH_INTERVAL:
             self.graph_count = 0
@@ -203,8 +199,8 @@ class Tbar:
 
             self.angvels.append(self.angvel.copy())
 
-            if self.angvels_count >= GRAPH_POINTS:
-                del self.angvels[0] #OJO!
+            if self.angvels_count >= GRAPH_POINTS: del\
+               self.angvels[0] #OJO!
 
         self.graph_count += 1
 
@@ -213,7 +209,6 @@ class Tbar:
         rotates the tbar based on the angular velocity
     """
     def _compute_rotation(self):
-
         angx, angy, angz = self.angvel / DEFAULT_DELAY * 180 / pi
 
         (*(glRotate(ang, *eje) for ang, eje in ((angx, x),\
@@ -237,21 +232,23 @@ class Tbar:
                + self.handle.mass/4 * self.handle.radius ** 2\
                + self.handle.mass/12 * self.handle.height ** 2,\
                self.handle.mass/2 * self.handle.radius ** 2\
-               + self.handle.mass * self.cm_distance ** 2 + self.axis.mass / 4 * self.axis.radius ** 2\
+               + self.handle.mass * self.cm_distance ** 2 +\
+               self.axis.mass / 4 * self.axis.radius ** 2\
                + self.axis.mass / 12 * self.axis.height ** 2\
-               + self.axis.mass * (self.axis.height / 2 + self.handle.radius - self.cm_distance),\
+               + self.axis.mass * (self.axis.height / 2 +\
+               self.handle.radius - self.cm_distance),\
                self.handle.mass/4 * self.handle.radius ** 2\
                + self.handle.mass/12 * self.handle.height ** 2\
                + self.handle.mass * self.cm_distance ** 2\
                + self.axis.mass/4 * self.axis.radius ** 2\
                + self.axis.mass/12 * self.axis.height ** 2\
-               + self.axis.mass * (self.axis.height / 2 + self.handle.radius - self.cm_distance)))
+               + self.axis.mass * (self.axis.height / 2 +\
+               self.handle.radius - self.cm_distance)))
 
 class World:
     def __init__(self, window_size=WINDOW_SIZE, clear_color=WHITE4F):
         (self.width, self.height), self.clear_color,\
-                     self.objects = window_size, clear_color, []
- 
+                     self.objects = window_size, clear_color, [] 
         self.perspective = (60, self.width / self.height, 0.1,\
                             100)
 
@@ -306,22 +303,21 @@ class World:
 class Screen:
     def __init__(self, display, tbar, window_size=WINDOW_SIZE):
         # display
-        self.display = display
-        self.window_size = window_size
+        self.display, self.window_size = display, window_size
 
         # menu
-        self.menu_h = 1
-        self.menu_padding = 0.2
+        self.menu_h, self.menu_padding = 1, 0.2
 
         # font
         self.font = SysFont("FreeMono", 16)
 
         # graph
-        self.colors = (YELLOW3F, GREEN3F, BLUE3F)
-        self.graph_ratio = ((self.menu_h/2 - self.menu_padding)
-            / (tbar.initial_angvel[0] * tbar.moment_inertia[0] + 10))
-        self.time_interval = 2 / GRAPH_POINTS * (1 - self.menu_padding) 
-        self.tbar = tbar
+        self.colors, self.graph_ratio =\
+            (YELLOW3F, GREEN3F, BLUE3F),\
+            ((self.menu_h/2 - self.menu_padding)/
+            (tbar.initial_angvel[0] * tbar.moment_inertia[0] + 10))
+        self.time_interval, self.tbar = 2 / GRAPH_POINTS *\
+                    (1 - self.menu_padding), tbar
 
     """
     Screen.render()
@@ -372,12 +368,13 @@ class Screen:
 
         glBegin(GL_LINES)
         # vertical line
-        (*(glVertex3f(self.menu_padding-1, n, 0) for n in
-           (self.menu_padding-1.1, 0.1-self.menu_padding)),)   
-        
-        # horizontal line
-        (*(glVertex3f(n, -0.5, 0) for n in (self.menu_padding-1.03,
-            1 - self.menu_padding)),)   
+        M, N = self.menu_padding-1, -0.5
+
+        (*(glVertex3f(m, n, 0) for m, n in
+           ((M, self.menu_padding-1.1),(M, 0.1-self.menu_padding),
+
+            (self.menu_padding-1.03, N),
+            (1 - self.menu_padding, N))),) 
         
         glEnd()
 
@@ -389,13 +386,20 @@ class Screen:
             glBegin(GL_LINE_STRIP)
 
             glColor3f(*self.colors[axis])
+            
             for angvel in self.tbar.angvels:
-                glVertex3f(self.menu_padding-1 + time,
-                           angvel[axis] * self.graph_ratio * self.tbar.moment_inertia[axis]-0.5,
-                           0)
+                glVertex3f(M + time, angvel[axis] *\
+                           self.graph_ratio *\
+                           self.tbar.moment_inertia[axis]-0.5, 0)
+
                 time += self.time_interval
 
             glEnd()
+
+    def _render_graph_info1(self, color, m):
+        glColor3f(*color)
+
+        (*(glVertex3f(m, n, 0) for m,n in m),)
 
     """
     Screen._render_graph_info()
@@ -404,20 +408,15 @@ class Screen:
     def _render_graph_info(self):
         self._render_text((self.menu_padding-1 + 0.05, -0.1),\
                           "Angular momentum")
-
+        
         glBegin(GL_LINES)
 
-        glColor3f(*YELLOW3F)
+        N, Ñ = 0.85, 0.9
 
-        (*(glVertex3f(n, -0.1, 0) for n in (0.85, 0.9)),)
-
-        glColor3f(*GREEN3F)
-
-        (*(glVertex3f(n, -0.17, 0) for n in (0.85, 0.9)),)
-
-        glColor3f(*BLUE3F)
-
-        (*(glVertex3f(n, -0.23, 0) for n in (0.85, 0.9)),)
+        (*(self._render_graph_info1(color, m) for color,m in
+           ((YELLOW3F, ((N,-0.1), (Ñ,-0.1))),
+            (GREEN3F, ((N,-0.17), (Ñ,-0.17))),
+            (BLUE3F, ((N,-0.23), (Ñ,-0.23))))),)
         
         glEnd()
 
@@ -431,6 +430,7 @@ class Screen:
     def _render_text(self, pos, text, color=(0, 0, 0, 255)):
         text_surface = self.font.render(text, True, color)
         text_data = tostring(text_surface, "RGBA", True)
+
         glRasterPos2d(*pos)
         glDrawPixels(text_surface.get_width(),\
                      text_surface.get_height(), GL_RGBA,\
@@ -438,9 +438,9 @@ class Screen:
 
 print('[*] Creating pygame display...')
 init()
-display = set_mode(WINDOW_SIZE, DOUBLEBUF | OPENGL)
+display, world, tbar = set_mode(WINDOW_SIZE, DOUBLEBUF | OPENGL),\
+    World(), Tbar()
 
-world, tbar = World(), Tbar()
 world.add_object(tbar)
 
 screen = Screen(display=display, tbar=tbar)
@@ -461,8 +461,8 @@ while frame < NUM_FRAMES:
         elif event.type == KEYUP:
             if event.key == K_SPACE:
                 paused = not paused
-                if paused:
-                    screen.show_paused_message()
+
+                if paused: screen.show_paused_message()
 
     if not paused:
         world.clear()
